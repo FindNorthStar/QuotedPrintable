@@ -5,22 +5,24 @@ import java.util.List;
  * Created by FindNS on 2016/10/9.
  */
 public class BenchmarkResult {
-    private String testName;
-    private double maxRaceFuzzerTime;
-    private double minRaceFuzzerTime;
-    private double avgRaceFuzzertime;
-    private double sumRaceFuzzerTime;
-    private double hybridTime;
-    private List<Double> testTime;
-    private int hybridNumOfRaces;
-    private int hybridNumOfDataRaces;
-    private int hybridNumOfLockRaces;
-    private int raceFuzzerNumOfRaces;
-    private int numOfExceptions;
+    public String testName;
+    public double maxRaceFuzzerTime;
+    public double minRaceFuzzerTime;
+    public double avgRaceFuzzerTime;
+    public double sumRaceFuzzerTime;
+    public double hybridTime;
+    public List<Double> testTime;
+    public int hybridNumOfRaces;
+    public int hybridNumOfDataRaces;
+    public int hybridNumOfLockRaces;
+    public int raceFuzzerNumOfRaces;
+    public int numOfExceptions;
+    public double hittingProbability;
 
     public BenchmarkResult(){
         testTime = new ArrayList<>();
         numOfExceptions = 0;
+        hittingProbability = 0.0;
     }
 
     public String getTestName() {
@@ -111,12 +113,19 @@ public class BenchmarkResult {
         this.testTime = testTime;
     }
 
-    public double getAvgRaceFuzzertime() {
-        return avgRaceFuzzertime;
+    public double getAvgRaceFuzzerTime() {
+        return avgRaceFuzzerTime;
     }
 
-    public void setAvgRaceFuzzertime(double avgRaceFuzzertime) {
-        this.avgRaceFuzzertime = avgRaceFuzzertime;
+    public void setAvgRaceFuzzerTime(double avgRaceFuzzerTime) {
+        this.avgRaceFuzzerTime = avgRaceFuzzerTime;
     }
 
+    public double getHittingProbability() {
+        return hittingProbability;
+    }
+
+    public void setHittingProbability(double hittingProbability) {
+        this.hittingProbability = hittingProbability;
+    }
 }

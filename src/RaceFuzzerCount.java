@@ -1,6 +1,7 @@
 import com.google.gson.Gson;
 
 import java.io.*;
+import java.lang.reflect.Field;
 import java.util.*;
 
 /**
@@ -8,16 +9,14 @@ import java.util.*;
  */
 public class RaceFuzzerCount {
 
-    public static void main(String[] args) throws IOException {
-        //String filePath = "D:\\IDEA\\calfuzzer-ksen007\\racefuzzerOutputUTF8.txt";
+    public static void main(String[] args) throws IOException, ClassNotFoundException, IllegalAccessException {
         String filePath = args[0];
         Scanner scanner = new Scanner(new File(filePath),"UTF-8");
 
         System.out.println("File Path is : "+filePath);
 
         OutputStreamWriter outputStreamWriter;
-        /*outputStreamWriter = new OutputStreamWriter(new FileOutputStream(
-                "racefuzzerOutputCount.json",true),"UTF-8");*/
+
         String outputPath = args[1];
         outputStreamWriter = new OutputStreamWriter(new FileOutputStream(
                 outputPath+".json",true),"UTF-8");
@@ -35,14 +34,25 @@ public class RaceFuzzerCount {
 
                 //count the real races in racefuzzer step
                 Map<Integer,Integer> realRaceMap = new HashMap<>();
+                Map<String,Integer> exceptionMap = new HashMap<>();
                 boolean isOneResult = false;
+                int totalIterationTimes = 0;
                 while(scanner.hasNextLine()) {
                     String line = scanner.nextLine();
 
+                    /*
+                    3 types of statement:
+                    analysis-once:
+                    active-loop:
+                    predictest-loop:
+                     */
                     if(line.equals("analysis-once:")){
                         boolean isHybridEnd = false;
                         while(scanner.hasNextLine()) {
                             String hybridLine = scanner.nextLine();
+                            /*
+                            extract hybrid race number and lock number
+                             */
                             if(hybridLine.contains("# of data races")){
                                 int num = 0;
                                 String[] hybridLineSplit = hybridLine.split(" ");
@@ -65,6 +75,9 @@ public class RaceFuzzerCount {
                                     }
                                 }
                             }
+                            /*
+                            extract hybrid running time
+                             */
                             else if(hybridLine.contains("[stopwatch]")) {
                                 String[] hybridLineSplit = hybridLine.split(" ");
                                 for (String s : hybridLineSplit) {
@@ -99,17 +112,31 @@ public class RaceFuzzerCount {
                                 }
                                 isStopWatch = false;
                                 if (activeLoopLine.contains("Error:Iteration")) {
+                                    totalIterationTimes++;
                                     int errorNum = 0;
                                     String[] activeLoopSplit = activeLoopLine.split(" ");
                                     errorNum = getErrorNum(activeLoopSplit);
 
                                     while (scanner.hasNextLine()) {
                                         String raceLine = scanner.nextLine();
+                                        /*
+                                        3 types of statements:
+                                        Real data race detected -> count race number
+                                        Exception in thread -> count exception number
+                                        [stopwatch] -> count running time
+                                         */
                                         if (raceLine.contains("Real data race detected")) {
                                             if (!realRaceMap.containsKey(errorNum)) {
                                                 realRaceMap.put(errorNum, 1);
                                             }
-                                        } else if (raceLine.contains("[stopwatch]")) {
+                                        }
+                                        else if (raceLine.contains("Exception in thread")){
+                                            String exceptionName = raceLine + " " + scanner.nextLine();
+                                            if(!exceptionMap.containsKey(exceptionName)){
+                                                exceptionMap.put(exceptionName,1);
+                                            }
+                                        }
+                                        else if(raceLine.contains("[stopwatch]")) {
                                             String[] raceLineSplit = raceLine.split(" ");
                                             for (String s : raceLineSplit) {
                                                 try {
@@ -129,7 +156,7 @@ public class RaceFuzzerCount {
                             }
                         }
                         //calculate num of real races and max/min/avg/sum racefuzzer time
-                        isOneResult = setOneResult(result,realRaceMap);
+                        isOneResult = setOneResult(result,realRaceMap,exceptionMap,totalIterationTimes);
                         break;
                     }
                     else if(line.equals("predictest-loop:")){
@@ -146,6 +173,7 @@ public class RaceFuzzerCount {
                                 }
                                 stopWatchCount = 0;
                                 if (activeLoopLine.contains("Error:Iteration")) {
+                                    totalIterationTimes++;
                                     int errorNum = 0;
                                     String[] activeLoopSplit = activeLoopLine.split(" ");
                                     errorNum = getErrorNum(activeLoopSplit);
@@ -155,6 +183,11 @@ public class RaceFuzzerCount {
                                         if (raceLine.contains("Data race detected")) {
                                             if (!realRaceMap.containsKey(errorNum)) {
                                                 realRaceMap.put(errorNum, 1);
+                                            }
+                                        } else if (raceLine.contains("Exception in thread")){
+                                            String exceptionName = raceLine + " " + scanner.nextLine();
+                                            if(!exceptionMap.containsKey(exceptionName)){
+                                                exceptionMap.put(exceptionName,1);
                                             }
                                         } else if (raceLine.contains("[stopwatch]")) {
                                             stopWatchCount++;
@@ -177,7 +210,7 @@ public class RaceFuzzerCount {
                                 }
                             }
                         }
-                        isOneResult = setOneResult(result,realRaceMap);
+                        isOneResult = setOneResult(result,realRaceMap,exceptionMap,totalIterationTimes);
                         break;
                     }
                     //insert a new result to benchmark
@@ -191,19 +224,42 @@ public class RaceFuzzerCount {
 
         Gson gson = new Gson();
 
+        /*
+        convert benchmark result to json
+         */
+        HashMap<String,BenchData> benchDataMap = new HashMap<>();
+
+        Class bench = Class.forName("BenchData");
+        Class benchRes = Class.forName("BenchmarkResult");
+        Field[] benchFields = bench.getDeclaredFields();
+        Field[] benchResFields = benchRes.getDeclaredFields();
+
         for(BenchmarkResult br : benchmarkResults){
-            String json = gson.toJson(br);
-            bufferedWriter.write(json+"\n");
-            /*System.out.println("testName : "+br.getTestName()+" hybridRaceNum : "+br.getHybridNumOfRaces()
-                    +" raceFuzzerNum : "+br.getRaceFuzzerNumOfRaces()+" avgTime : "+br.getAvgRaceFuzzertime());*/
+            BenchData bd = new BenchData();
+            for(Field bf : benchFields){
+                for(Field brf : benchResFields){
+                    if(bf.getName().equals(brf.getName())){
+                        bf.set(bd,brf.get(br));
+                        break;
+                    }
+                }
+            }
+            benchDataMap.put(br.getTestName(),bd);
         }
+
+        bufferedWriter.write(gson.toJson(benchDataMap));
+
+        System.out.println("Json file generated successfully");
 
         scanner.close();
         bufferedWriter.close();
         outputStreamWriter.close();
     }
 
-    private static boolean setOneResult(BenchmarkResult result, Map<Integer, Integer> realRaceMap) {
+    private static boolean setOneResult(BenchmarkResult result,
+                                        Map<Integer, Integer> realRaceMap,
+                                        Map<String, Integer> exceptionMap,
+                                        int totalIterationTimes) {
         result.setMaxRaceFuzzerTime(Collections.max(result.getTestTime()));
         result.setMinRaceFuzzerTime(Collections.min(result.getTestTime()));
         double averageTime = 0.0;
@@ -212,8 +268,10 @@ public class RaceFuzzerCount {
         }
         result.setSumRaceFuzzerTime(averageTime);
         averageTime = averageTime / result.getTestTime().size();
-        result.setAvgRaceFuzzertime(averageTime);
+        result.setAvgRaceFuzzerTime(averageTime);
         result.setRaceFuzzerNumOfRaces(realRaceMap.size());
+        result.setNumOfExceptions(exceptionMap.size());
+        result.setHittingProbability((realRaceMap.size() * 1.0) / totalIterationTimes);
         return true;
     }
 
@@ -239,7 +297,7 @@ public class RaceFuzzerCount {
     public static boolean setZeroTimeAndRace(BenchmarkResult result){
         result.setMaxRaceFuzzerTime(0.0);
         result.setMinRaceFuzzerTime(0.0);
-        result.setAvgRaceFuzzertime(0.0);
+        result.setAvgRaceFuzzerTime(0.0);
         result.setSumRaceFuzzerTime(0.0);
         result.setRaceFuzzerNumOfRaces(0);
         return true;

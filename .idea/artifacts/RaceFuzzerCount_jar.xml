@@ -1,0 +1,10 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="RaceFuzzerCount:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/RaceFuzzerCount_jar</output-path>
+    <root id="archive" name="RaceFuzzerCount.jar">
+      <element id="module-output" name="QuotedPrintable" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/commons-codec-1.7.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/gson-2.7.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>
