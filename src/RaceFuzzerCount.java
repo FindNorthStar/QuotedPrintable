@@ -9,12 +9,25 @@ import java.util.*;
  */
 public class RaceFuzzerCount {
 
+    /**
+     *
+     * @param args
+     * @throws IOException
+     * @throws ClassNotFoundException
+     * @throws IllegalAccessException
+     */
     public static void main(String[] args) throws IOException, ClassNotFoundException, IllegalAccessException {
+        /*
+        specify input file, use UTF-8 format
+         */
         String filePath = args[0];
         Scanner scanner = new Scanner(new File(filePath),"UTF-8");
 
         System.out.println("File Path is : "+filePath);
 
+        /*
+        sepcify output file, use UTF-8 format
+         */
         OutputStreamWriter outputStreamWriter;
 
         String outputPath = args[1];
@@ -22,15 +35,26 @@ public class RaceFuzzerCount {
                 outputPath+".json",true),"UTF-8");
         BufferedWriter bufferedWriter = new BufferedWriter(outputStreamWriter);
 
+        /*
+        result is stored in list
+         */
         List<BenchmarkResult> benchmarkResults = new ArrayList<>();
 
+        int lineNum = 0;
+        /*
+        process each line
+         */
         while(scanner.hasNextLine()){
             String startLine = scanner.nextLine();
+            lineNum++;
+
             String[] startLineSplit = startLine.split("_");
             //maybe t_test in future
             if(startLineSplit[0].equals("test")){
                 BenchmarkResult result = new BenchmarkResult();
                 result.setTestName(startLine.substring(0,startLine.length()-1));//remove the last colon(:)
+
+                System.out.println("Processing "+result.getTestName()+" in line "+lineNum);
 
                 //count the real races in racefuzzer step
                 Map<Integer,Integer> realRaceMap = new HashMap<>();
@@ -39,6 +63,7 @@ public class RaceFuzzerCount {
                 int totalIterationTimes = 0;
                 while(scanner.hasNextLine()) {
                     String line = scanner.nextLine();
+                    lineNum++;
 
                     /*
                     3 types of statement:
@@ -50,47 +75,15 @@ public class RaceFuzzerCount {
                         boolean isHybridEnd = false;
                         while(scanner.hasNextLine()) {
                             String hybridLine = scanner.nextLine();
-                            /*
-                            extract hybrid race number and lock number
-                             */
+                            lineNum++;
+
+                            //extract hybrid race number and lock number
                             if(hybridLine.contains("# of data races")){
-                                int num = 0;
-                                String[] hybridLineSplit = hybridLine.split(" ");
-                                for(String s : hybridLineSplit){
-                                    try {
-                                        int raceNum = Integer.parseInt(s);
-                                        if(num == 0){
-                                            result.setHybridNumOfDataRaces(raceNum);
-                                        }
-                                        else if(num == 1){
-                                            result.setHybridNumOfLockRaces(raceNum);
-                                            result.setHybridNumOfRaces(result.getHybridNumOfDataRaces()
-                                                    + result.getHybridNumOfLockRaces());
-                                            break;
-                                        }
-                                        num++;
-                                    }
-                                    catch (NumberFormatException e){
-                                        continue;
-                                    }
-                                }
+                                processNumOfDataLockRaces(hybridLine,result);
                             }
-                            /*
-                            extract hybrid running time
-                             */
+                            //extract hybrid running time
                             else if(hybridLine.contains("[stopwatch]")) {
-                                String[] hybridLineSplit = hybridLine.split(" ");
-                                for (String s : hybridLineSplit) {
-                                    try {
-                                        double hybridTime = Double.parseDouble(s);
-                                        result.setHybridTime(hybridTime);
-                                        isHybridEnd = true;
-                                        break;
-                                    }
-                                    catch (NumberFormatException e) {
-                                        continue;
-                                    }
-                                }
+                                isHybridEnd = processHybridStopWatch(hybridLine,result);
                             }
                             if(isHybridEnd){
                                 break;
@@ -107,6 +100,8 @@ public class RaceFuzzerCount {
                             boolean isStopWatch = false;
                             while (scanner.hasNextLine()) {
                                 String activeLoopLine = scanner.nextLine();
+                                lineNum++;
+
                                 if(isStopWatch && !activeLoopLine.contains("[echo]")){
                                     break;
                                 }
@@ -119,10 +114,12 @@ public class RaceFuzzerCount {
 
                                     while (scanner.hasNextLine()) {
                                         String raceLine = scanner.nextLine();
+                                        lineNum++;
+
                                         /*
                                         3 types of statements:
                                         Real data race detected -> count race number
-                                        Exception in thread -> count exception number
+                                        Exception -> count exception number
                                         [stopwatch] -> count running time
                                          */
                                         if (raceLine.contains("Real data race detected")) {
@@ -130,25 +127,16 @@ public class RaceFuzzerCount {
                                                 realRaceMap.put(errorNum, 1);
                                             }
                                         }
-                                        else if (raceLine.contains("Exception in thread")){
+                                        else if (raceLine.contains("Exception")){
                                             String exceptionName = raceLine + " " + scanner.nextLine();
+                                            lineNum++;
+
                                             if(!exceptionMap.containsKey(exceptionName)){
                                                 exceptionMap.put(exceptionName,1);
                                             }
                                         }
                                         else if(raceLine.contains("[stopwatch]")) {
-                                            String[] raceLineSplit = raceLine.split(" ");
-                                            for (String s : raceLineSplit) {
-                                                try {
-                                                    double raceFuzzerTime = Double.parseDouble(s);
-                                                    result.getTestTime().add(raceFuzzerTime);
-                                                    break;
-                                                }
-                                                catch (NumberFormatException e) {
-                                                    continue;
-                                                }
-                                            }
-                                            isStopWatch = true;
+                                            isStopWatch = processActiveLoopStopWach(raceLine,result);
                                             break;
                                         }
                                     }
@@ -168,6 +156,8 @@ public class RaceFuzzerCount {
                             int stopWatchCount = 0;
                             while (scanner.hasNextLine()) {
                                 String activeLoopLine = scanner.nextLine();
+                                lineNum++;
+
                                 if(stopWatchCount == 2 && !activeLoopLine.contains("[echo]")) {
                                     break;
                                 }
@@ -180,28 +170,28 @@ public class RaceFuzzerCount {
 
                                     while (scanner.hasNextLine()) {
                                         String raceLine = scanner.nextLine();
+                                        lineNum++;
+
+                                        /*
+                                        3 types of statements:
+                                        Data race detected -> count race number
+                                        Exception -> count exception number
+                                        [stopwatch] -> count running time
+                                         */
                                         if (raceLine.contains("Data race detected")) {
                                             if (!realRaceMap.containsKey(errorNum)) {
                                                 realRaceMap.put(errorNum, 1);
                                             }
-                                        } else if (raceLine.contains("Exception in thread")){
+                                        } else if (raceLine.contains("Exception")){
                                             String exceptionName = raceLine + " " + scanner.nextLine();
+                                            lineNum++;
+
                                             if(!exceptionMap.containsKey(exceptionName)){
                                                 exceptionMap.put(exceptionName,1);
                                             }
                                         } else if (raceLine.contains("[stopwatch]")) {
                                             stopWatchCount++;
-                                            String[] raceLineSplit = raceLine.split(" ");
-                                            for (String s : raceLineSplit) {
-                                                try {
-                                                    double raceFuzzerTime = Double.parseDouble(s);
-                                                    result.getTestTime().add(raceFuzzerTime);
-                                                    break;
-                                                }
-                                                catch (NumberFormatException e) {
-                                                    continue;
-                                                }
-                                            }
+                                            processPredictestLoopStopWatch(raceLine,result);
                                             if(stopWatchCount == 2) {
                                                 break;
                                             }
@@ -256,6 +246,125 @@ public class RaceFuzzerCount {
         outputStreamWriter.close();
     }
 
+    /**
+     *
+     * @param raceLine
+     * @param result
+     */
+    private static void processPredictestLoopStopWatch(String raceLine, BenchmarkResult result) {
+        String[] raceLineSplit = raceLine.split(" ");
+        for (String s : raceLineSplit) {
+            try {
+                double raceFuzzerTime = Double.parseDouble(s);
+                result.getTestTime().add(raceFuzzerTime);
+                break;
+            }
+            catch (NumberFormatException e) {
+                continue;
+            }
+        }
+    }
+
+    /**
+     *
+     * @param raceLine
+     * @param result
+     * @return
+     */
+    private static boolean processActiveLoopStopWach(String raceLine, BenchmarkResult result) {
+        String[] raceLineSplit = raceLine.split(" ");
+        for (String s : raceLineSplit) {
+            try {
+                if((!s.contains("timer")) && s.contains(":")){
+                    //process more than time format such as 1:22.976
+                    //hope running time not beyond 1 hour
+                    String timeSplit[] = s.split(":");
+                    double minCount = Double.parseDouble(timeSplit[0]);
+                    double secCount = Double.parseDouble(timeSplit[1]);
+                    double raceFuzzerTime = 60 * minCount + secCount;
+                    result.getTestTime().add(raceFuzzerTime);
+                }
+                else {
+                    double raceFuzzerTime = Double.parseDouble(s);
+                    result.getTestTime().add(raceFuzzerTime);
+                }
+                break;
+            }
+            catch (NumberFormatException e) {
+                continue;
+            }
+        }
+        return true;
+    }
+
+    /**
+     *
+     * @param hybridLine
+     * @param result
+     * @return
+     */
+    private static boolean processHybridStopWatch(String hybridLine, BenchmarkResult result) {
+        String[] hybridLineSplit = hybridLine.split(" ");
+        for (String s : hybridLineSplit) {
+            try {
+                if((!s.contains("timer")) && s.contains(":")){
+                    //process more than time format such as 1:22.976
+                    //hope running time not beyond 1 hour
+                    String timeSplit[] = s.split(":");
+                    double minCount = Double.parseDouble(timeSplit[0]);
+                    double secCount = Double.parseDouble(timeSplit[1]);
+                    double hybridtime = 60 * minCount + secCount;
+                    result.setHybridTime(hybridtime);
+                }
+                else {
+                    double hybridTime = Double.parseDouble(s);
+                    result.setHybridTime(hybridTime);
+                }
+                return true;
+            }
+            catch (NumberFormatException e) {
+                continue;
+            }
+        }
+        return false;
+    }
+
+    /**
+     *
+     * @param hybridLine
+     * @param result
+     */
+    private static void processNumOfDataLockRaces(String hybridLine, BenchmarkResult result) {
+        int num = 0;
+        String[] hybridLineSplit = hybridLine.split(" ");
+        for(String s : hybridLineSplit){
+            try {
+                int raceNum = Integer.parseInt(s);
+                if(num == 0){
+                    result.setHybridNumOfDataRaces(raceNum);
+                }
+                else if(num == 1){
+                    result.setHybridNumOfLockRaces(raceNum);
+                    result.setHybridNumOfRaces(result.getHybridNumOfDataRaces()
+                            + result.getHybridNumOfLockRaces());
+                    break;
+                }
+                num++;
+            }
+            catch (NumberFormatException e){
+                continue;
+            }
+        }
+    }
+
+    /**
+     *
+     * @param result
+     * @param realRaceMap
+     * @param exceptionMap
+     * @param totalIterationTimes
+     * @return
+     */
     private static boolean setOneResult(BenchmarkResult result,
                                         Map<Integer, Integer> realRaceMap,
                                         Map<String, Integer> exceptionMap,
@@ -275,6 +384,11 @@ public class RaceFuzzerCount {
         return true;
     }
 
+    /**
+     *
+     * @param activeLoopSplit
+     * @return
+     */
     private static int getErrorNum(String[] activeLoopSplit) {
         int num = 0;
         for (String s : activeLoopSplit) {
@@ -294,6 +408,11 @@ public class RaceFuzzerCount {
         return 0;
     }
 
+    /**
+     *
+     * @param result
+     * @return
+     */
     public static boolean setZeroTimeAndRace(BenchmarkResult result){
         result.setMaxRaceFuzzerTime(0.0);
         result.setMinRaceFuzzerTime(0.0);
@@ -303,18 +422,5 @@ public class RaceFuzzerCount {
         return true;
     }
 
-                                /*  if(activeLoopLine.contains("[echo] Iteration:")){
-                                String[] activeLoopSplit = activeLoopLine.split(" ");
-                                for(String s : activeLoopSplit){
-                                    try {
-                                        iterationNum = Integer.parseInt(s);
-                                        break;
-                                    }
-                                    catch(NumberFormatException e){
-                                        continue;
-                                    }
-                                }
-                            }
-                            else */
 }
 

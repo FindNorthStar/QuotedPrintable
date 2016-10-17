@@ -12,6 +12,14 @@ import java.util.*;
 public class SearchBenchmarkResult {
 
     public static void main(String args[]) throws FileNotFoundException, ClassNotFoundException, IllegalAccessException {
+        if(args[0].equals("-h")){
+            System.out.println("operations are below:");
+            System.out.println("[input json] listname");
+            System.out.println("[input json] listfields");
+            System.out.println("[input json] [benchmark name] [benchmark fields]");
+            return;
+        }
+
         String jsonPath = args[0];
         Scanner scanner = new Scanner(new File(jsonPath),"UTF-8");
         Gson gson = new Gson();
