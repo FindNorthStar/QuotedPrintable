@@ -41,7 +41,24 @@ public class SearchBenchmarkResult {
                 System.out.println(f.getName());
             }
         }
-        else{
+        else if(args.length == 2){
+            boolean isFind = false;
+            for(Map.Entry<String, BenchData> entry : benchDataMap.entrySet()) {
+                if (entry.getKey().equals(args[1])) {
+                    for(Field f : fields){
+                        System.out.println(entry.getKey()+"."+f.getName()+" = "+f.get(entry.getValue()));
+                        isFind = true;
+                    }
+                }
+                if(isFind){
+                    break;
+                }
+            }
+            if(!isFind){
+                System.out.println("No Results Found!");
+            }
+        }
+        else if(args.length == 3){
             boolean isFind = false;
             for(Map.Entry<String, BenchData> entry : benchDataMap.entrySet()){
                 if(entry.getKey().equals(args[1])){
@@ -60,6 +77,9 @@ public class SearchBenchmarkResult {
             if(!isFind){
                 System.out.println("No Results Found!");
             }
+        }
+        else{
+            System.out.println("No Results Found!");
         }
 
         /*for(Field f : fields){
